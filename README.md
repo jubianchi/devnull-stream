@@ -136,13 +136,42 @@ Stars, pastéis and deletion need a key approved as a device, once:
 vendor/bin/devnull authorize "My laptop"
 ```
 
+It prints the account the key was approved for. The key is `DEVNULL_KEY`, or your SSH agent's first key.
+
+### With a code typed on the web
+
+This is the intended flow, the [device authorization grant](https://www.rfc-editor.org/rfc/rfc8628) for terminals.
+dev-null.sh doesn't offer it yet: it is proposed in
+[dev-null-sh/dev-null.sh#585](https://github.com/dev-null-sh/dev-null.sh/pull/585).
+
+```text
+Open and approve:
+
+   https://dev-null.sh/activate?user_code=WDJB-MJHT
+
+or open https://dev-null.sh/activate and type the code WDJB-MJHT
+
+Waiting for the approval…
+Approved as a device of @you.
+```
+
+1. The command asks for a code with a request signed by the key to approve, and prints it with where to type it.
+2. Open the link, sign in, check the code and approve.
+3. Meanwhile the command asks every few seconds whether you approved, slowing down when the server says so. It
+   stops if you deny the device or once the code expires, after 15 minutes.
+
+### With a link copied from the browser
+
+When the server has no device authorization grant (its start endpoint answers 404, as dev-null.sh does today), the
+command falls back on the mobile app's sign-in:
+
 1. The command prints a `https://dev-null.sh/mobile/authorize?…` link: open it, sign in and approve.
 2. The page then sends your browser to a `devnull://authorize?code=…` link, which it cannot open. Copy that link
    from the address bar, or from the `Location` header of the approval's `POST` in the developer tools' Network
    tab, and paste it in the terminal.
 
 The command redeems the code with a [PKCE](https://www.rfc-editor.org/rfc/rfc7636) verifier only it knows, so the
-link is useless to anyone else, and prints the account the key was approved for.
+link is useless to anyone else.
 
 ## How signing works
 
@@ -167,7 +196,8 @@ of the armored signature; the signed API also gets `X-Devnull-Timestamp` and `X-
 ## Design
 
 The stream wrapper is a thin adapter over a client, whose transport, signer and key discovery are ports, so that
-everything is tested without network.
+everything is tested without network. Device approval is a port too, with one strategy per flow, and its polling
+sleeps through a clock port, so that tests don't wait.
 
 ```mermaid
 flowchart LR
@@ -176,7 +206,13 @@ flowchart LR
     wrapper --> path[Path]
     wrapper --> formatter[CommitFormatter]
     wrapper --> client[Client]
-    app --> client
+    app --> flow{{Authorization\AuthorizationFlow}}
+    flow --> fallback[FallbackFlow]
+    fallback --> devicecode[DeviceCodeFlow<br>RFC 8628]
+    fallback -- "on 404" --> pkceflow[PkceFlow<br>RFC 7636]
+    devicecode --> clock{{Clock\Clock}}
+    devicecode --> client
+    pkceflow --> client
     client --> transport{{Http\Transport}}
     client --> signer{{Signing\Signer}}
     client --> keys{{Keys\KeyRing}}
