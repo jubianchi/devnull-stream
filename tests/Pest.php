@@ -3,24 +3,28 @@
 declare(strict_types=1);
 
 use Jubianchi\DevNull\Client;
+use Jubianchi\DevNull\Keys\KeyRing;
+use Jubianchi\DevNull\Signing\Signer;
 use Jubianchi\DevNull\StreamWrapper;
+use Jubianchi\DevNull\Tests\Fakes\FakeKeyRing;
+use Jubianchi\DevNull\Tests\Fakes\FakeSigner;
 use Jubianchi\DevNull\Tests\Fakes\FakeTransport;
 
 const TEST_URL = 'https://dev-null.test';
 
-function client(FakeTransport $transport): Client
+function client(FakeTransport $transport, ?Signer $signer = null, ?KeyRing $keys = null, ?string $key = null): Client
 {
-    return new Client(TEST_URL, $transport);
+    return new Client(TEST_URL, $transport, $signer ?? new FakeSigner(), $keys ?? new FakeKeyRing(), $key);
 }
 
 /**
  * Points the stream wrapper at a fake API.
  */
-function fakeApi(): FakeTransport
+function fakeApi(?Signer $signer = null, ?KeyRing $keys = null, ?string $key = null): FakeTransport
 {
     $transport = new FakeTransport();
     StreamWrapper::register();
-    StreamWrapper::useClientFactory(static fn(): Client => client($transport));
+    StreamWrapper::useClientFactory(static fn(): Client => client($transport, $signer, $keys, $key));
 
     return $transport;
 }

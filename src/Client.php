@@ -9,14 +9,28 @@ use InvalidArgumentException;
 use Jubianchi\DevNull\Http\NativeTransport;
 use Jubianchi\DevNull\Http\Request;
 use Jubianchi\DevNull\Http\Transport;
+use Jubianchi\DevNull\Keys\KeyRing;
+use Jubianchi\DevNull\Keys\LocalKeyRing;
+use Jubianchi\DevNull\Keys\PublicKey;
+use Jubianchi\DevNull\Signing\Payload;
+use Jubianchi\DevNull\Signing\Signer;
+use Jubianchi\DevNull\Signing\SshKeygenSigner;
+use RuntimeException;
 
 final readonly class Client
 {
     private string $url;
 
+    /**
+     * @param string|null $key the key to sign with (private key file, or public key held by the agent); null
+     *                         to pick one from the key ring
+     */
     public function __construct(
         string $url,
-        private Transport $transport,
+        private Transport $transport = new NativeTransport(),
+        private Signer $signer = new SshKeygenSigner(),
+        private KeyRing $keys = new LocalKeyRing(),
+        private ?string $key = null,
     ) {
         $this->url = rtrim($url, '/');
 
@@ -27,7 +41,7 @@ final readonly class Client
 
     public static function create(Settings $settings): self
     {
-        return new self($settings->url, new NativeTransport());
+        return new self($settings->url, key: $settings->key);
     }
 
     /**
@@ -53,6 +67,43 @@ final readonly class Client
             $cursor = is_array($meta) ? ($meta['next_cursor'] ?? null) : null;
             $next = is_string($cursor) || is_int($cursor) ? self::withCursor($next, (string) $cursor) : null;
         }
+    }
+
+    /**
+     * Commits, or replies to $replyTo, through the endpoint `curl dev-null.sh/commit | bash` uses: any SSH key on
+     * your GitHub account signs. Returns the link to what was created.
+     */
+    public function commit(string $message, string $replyTo = ''): string
+    {
+        $payload = Payload::commit(time(), Payload::nonce(), $replyTo, $message);
+        $signature = $this->signer->sign($payload, Payload::COMMIT_NAMESPACE, $this->commitKey());
+
+        return trim($this->request('POST', '/api/cli/commits', $payload, [
+            'Content-Type: text/plain; charset=utf-8',
+            "X-SSH-Signature: {$signature}",
+        ]));
+    }
+
+    /**
+     * The configured key, or the first local key that dev-null.sh finds on the GitHub account of one of its users.
+     */
+    private function commitKey(): string
+    {
+        if ($this->key !== null) {
+            return $this->key;
+        }
+
+        $candidates = $this->keys->keys();
+
+        if ($candidates === []) {
+            throw new RuntimeException('No Ed25519 or RSA SSH key found in your SSH agent or in ~/.ssh.');
+        }
+
+        $found = PublicKey::id($this->request('POST', '/api/cli/key-lookups', implode("\n", array_keys($candidates)) . "\n", [
+            'Content-Type: text/plain; charset=utf-8',
+        ]));
+
+        return $candidates[$found] ?? throw new RuntimeException('None of your SSH keys is on the GitHub account of a /dev/null user.');
     }
 
     /**
