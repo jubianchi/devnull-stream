@@ -7,6 +7,7 @@ namespace Jubianchi\DevNull;
 use Closure;
 use Generator;
 use InvalidArgumentException;
+use Jubianchi\DevNull\Authorization\DeviceAuthorization;
 use Jubianchi\DevNull\Authorization\Pkce;
 use Jubianchi\DevNull\Http\NativeTransport;
 use Jubianchi\DevNull\Http\Request;
@@ -134,6 +135,27 @@ final readonly class Client
         }
 
         return $this->signed('POST', '/api/v1/devices', ['code' => $answer['code'], 'code_verifier' => $pkce->verifier]);
+    }
+
+    /**
+     * Starts the device authorization grant (RFC 8628) for the key, which isn't approved yet.
+     */
+    public function startDeviceAuthorization(string $deviceName): DeviceAuthorization
+    {
+        return DeviceAuthorization::fromAnswer(
+            $this->signed('POST', '/api/v1/device-authorizations', ['device_name' => $deviceName]),
+            'POST /api/v1/device-authorizations',
+        );
+    }
+
+    /**
+     * Asks once whether the user approved the device code; answers as GET /api/v1/me does when they did.
+     *
+     * @return array<mixed>
+     */
+    public function redeemDeviceCode(string $deviceCode): array
+    {
+        return $this->signed('POST', '/api/v1/devices', ['device_code' => $deviceCode]);
     }
 
     /**
