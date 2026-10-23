@@ -23,6 +23,13 @@ it('registers devnull:// as soon as the autoloader is loaded', function (): void
         ->and($output)->toBe('yes');
 });
 
+it('registers the DevNull\\ autoloader as soon as the autoloader is loaded', function (): void {
+    [$status, $output] = runPhp(['-r', 'require "vendor/autoload.php"; Jubianchi\DevNull\Autoloader::register(); echo count(array_filter(spl_autoload_functions(), fn($f) => $f instanceof Closure && (new ReflectionFunction($f))->getName() === "load"));']);
+
+    expect($status)->toBe(0)
+        ->and($output)->toBe('1');
+});
+
 it('registers devnull:// only once', function (): void {
     [$status, $output] = runPhp(['-r', 'require "vendor/autoload.php"; Jubianchi\DevNull\StreamWrapper::register(); echo "ok";']);
 
