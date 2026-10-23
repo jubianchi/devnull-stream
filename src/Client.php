@@ -85,6 +85,37 @@ final readonly class Client
     }
 
     /**
+     * Calls the signed API the mobile app uses: the key has to be approved as a device (see authorize()).
+     *
+     * @param array<mixed>|null $body
+     * @return array<mixed>
+     */
+    public function signed(string $method, string $uri, ?array $body = null): array
+    {
+        $json = $body === null ? '' : json_encode($body, JSON_THROW_ON_ERROR);
+        $timestamp = time();
+        $nonce = Payload::nonce();
+        $signature = $this->signer->sign(Payload::api($timestamp, $nonce, $method, $uri, $json), Payload::API_NAMESPACE, $this->deviceKey());
+
+        return self::json($this->request($method, $uri, $json, [
+            'Content-Type: application/json',
+            "X-Devnull-Timestamp: {$timestamp}",
+            "X-Devnull-Nonce: {$nonce}",
+            "X-SSH-Signature: {$signature}",
+        ]));
+    }
+
+    /**
+     * The signed API knows nothing of GitHub keys: the configured key, or the key ring's first one.
+     */
+    private function deviceKey(): string
+    {
+        return $this->key
+            ?? array_values($this->keys->keys())[0]
+            ?? throw new RuntimeException('Set DEVNULL_KEY to the key approved as a device.');
+    }
+
+    /**
      * The configured key, or the first local key that dev-null.sh finds on the GitHub account of one of its users.
      */
     private function commitKey(): string
