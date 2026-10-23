@@ -1,0 +1,45 @@
+{
+    "name": "jubianchi/devnull-stream",
+    "description": "A devnull:// PHP stream wrapper for https://dev-null.sh: read, commit, reply, star and give pastéis with plain file functions.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["dev-null.sh", "stream-wrapper", "ssh", "signature"],
+    "authors": [
+        {
+            "name": "Julien Bianchi",
+            "email": "julien.bianchi@pmsipilot.com"
+        }
+    ],
+    "require": {
+        "php": "^8.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Jubianchi\\DevNull\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jubianchi\\DevNull\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "lint": "pint --test",
+        "fix": "pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require-dev": {
+        "laravel/pint": "^1.32",
+        "pestphp/pest": "^5.3",
+        "phpstan/phpstan": "^2"
+    }
+}
