@@ -1,0 +1,14 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Jubianchi\DevNull\Client;
+use Jubianchi\DevNull\Console\Application;
+use Jubianchi\DevNull\Settings;
+
+require $_composer_autoload_path ?? dirname(__DIR__) . '/vendor/autoload.php';
+
+$arguments = is_array($_SERVER['argv'] ?? null) ? array_values(array_filter($_SERVER['argv'], is_string(...))) : [];
+
+exit(new Application(Client::create(Settings::resolve()))->run($arguments, STDIN, STDERR));

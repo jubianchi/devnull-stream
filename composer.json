@@ -16,13 +16,19 @@
     "autoload": {
         "psr-4": {
             "Jubianchi\\DevNull\\": "src/"
-        }
+        },
+        "files": [
+            "src/register.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
             "Jubianchi\\DevNull\\Tests\\": "tests/"
         }
     },
+    "bin": [
+        "bin/devnull"
+    ],
     "scripts": {
         "test": "pest",
         "analyse": "phpstan analyse --memory-limit=1G",

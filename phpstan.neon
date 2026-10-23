@@ -1,5 +1,6 @@
 parameters:
     level: max
     paths:
+        - bin/devnull
         - src
         - tests
