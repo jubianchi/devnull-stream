@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace Jubianchi\DevNull\Console;
 
 use Closure;
+use Jubianchi\DevNull\Authorization\DeviceAuthorization;
+use Jubianchi\DevNull\Authorization\DeviceCodeFlow;
+use Jubianchi\DevNull\Authorization\FallbackFlow;
 use Jubianchi\DevNull\Authorization\Pkce;
+use Jubianchi\DevNull\Authorization\PkceFlow;
 use Jubianchi\DevNull\Client;
+use Jubianchi\DevNull\Clock\Clock;
+use Jubianchi\DevNull\Clock\SystemClock;
 use Throwable;
 
 /**
@@ -19,6 +25,7 @@ final readonly class Application
      */
     public function __construct(
         private Client $client,
+        private Clock $clock = new SystemClock(),
         private ?Closure $pkce = null,
     ) {}
 
@@ -39,14 +46,23 @@ final readonly class Application
 
         $deviceName = trim(implode(' ', array_slice($argv, 2))) ?: 'PHP stream wrapper';
 
-        try {
-            $me = $this->client->authorize($deviceName, static function (string $url) use ($input, $output): string {
+        $flow = new FallbackFlow(
+            new DeviceCodeFlow($this->client, static function (DeviceAuthorization $authorization) use ($output): void {
+                fwrite($output, "Open and approve:\n\n   {$authorization->verificationUriComplete}\n\n");
+                fwrite($output, "or open {$authorization->verificationUri} and type the code {$authorization->userCode}\n\n");
+                fwrite($output, 'Waiting for the approval…');
+            }, $this->clock),
+            new PkceFlow($this->client, static function (string $url) use ($input, $output): string {
                 fwrite($output, "1. Open and approve:\n\n   {$url}\n\n");
                 fwrite($output, "2. Your browser then fails to open a devnull://authorize?code=… link: copy it from the address bar\n");
                 fwrite($output, "   (or the Location header of the POST in the developer tools' Network tab) and paste it here: ");
 
                 return (string) fgets($input);
-            }, $this->pkce === null ? null : ($this->pkce)());
+            }, $this->pkce),
+        );
+
+        try {
+            $me = $flow->authorize($deviceName);
         } catch (Throwable $e) {
             fwrite($output, "\n{$e->getMessage()}\n");
 
