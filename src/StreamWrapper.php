@@ -221,6 +221,55 @@ final class StreamWrapper
         return true;
     }
 
+    /**
+     * touch() stars a commit (.../star) or gives it a pastel de nata (.../pasteis).
+     */
+    public function stream_metadata(string $path, int $option, mixed $value): bool
+    {
+        if ($option !== STREAM_META_TOUCH) {
+            return false;
+        }
+
+        try {
+            [$commitId, $action] = Path::parse($path)->commitAction()
+                ?? throw new RuntimeException("touch() a commit's star or pasteis, not {$path}.");
+
+            $this->client()->signed('POST', "/api/v1/commits/{$commitId}/{$action->value}");
+
+            return true;
+        } catch (Throwable $e) {
+            self::warn($e->getMessage());
+
+            return false;
+        }
+    }
+
+    /**
+     * unlink() unstars a commit (.../star), or deletes one of yours.
+     */
+    public function unlink(string $path): bool
+    {
+        try {
+            $target = Path::parse($path);
+            $commitId = $target->commitId();
+            [$starred, $action] = $target->commitAction() ?? [null, null];
+
+            $uri = match (true) {
+                $action === CommitAction::Star => "/api/v1/commits/{$starred}/star",
+                $commitId !== null => "/api/v1/commits/{$commitId}",
+                default => throw new RuntimeException("unlink() a commit or its star, not {$path}."),
+            };
+
+            $this->client()->signed('DELETE', $uri);
+
+            return true;
+        } catch (Throwable $e) {
+            self::warn($e->getMessage());
+
+            return false;
+        }
+    }
+
     private function client(): Client
     {
         $options = is_resource($this->context) ? (stream_context_get_options($this->context)[self::SCHEME] ?? []) : [];
