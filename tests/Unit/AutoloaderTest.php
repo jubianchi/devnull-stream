@@ -75,6 +75,32 @@ it('runs the latest commit declaring the class, looking through the pages', func
         ->and($api->requests)->toHaveCount(2);
 });
 
+it('runs the commit whose id starts with the version, in its namespace', function (): void {
+    commitsOfDseguy(
+        [commit('01a16900-0000-7000-8000-000000000000', ['body' => '<?php class Pinned { const VERSION = 2; }'])],
+        [commit('01a16807-1328-7241-b932-f19dd0286c13', ['body' => '<?php class Pinned { const VERSION = 1; }'])],
+    );
+
+    expect(constant(devnull('dseguy\v01a16807\Pinned') . '::VERSION'))->toBe(1)
+        ->and(constant(devnull('dseguy\V01A16900\Pinned') . '::VERSION'))->toBe(2)
+        ->and(constant(devnull('dseguy\Pinned') . '::VERSION'))->toBe(2);
+});
+
+it("fetches the commit of a whole id, when it is the user's", function (): void {
+    $id = '01a16807-1328-7241-b932-f19dd0286c13';
+    $api = new FakeTransport()
+        ->on('GET', "/api/v1/commits/{$id}", ['data' => commit($id, ['body' => '<?php class Whole {}'])])
+        ->on('GET', '/api/v1/commits/01a16807-1328-7241-b932-000000000000', ['data' => commit('01a16807-1328-7241-b932-000000000000', [
+            'author' => ['name' => 'Someone Else', 'username' => 'someone'],
+            'body' => '<?php class Whole {}',
+        ])]);
+    Autoloader::useClientFactory(static fn(): Client => client($api));
+
+    expect(class_exists(devnull('dseguy\v01a1680713287241b932000000000000\Whole')))->toBeFalse()
+        ->and(class_exists(devnull('dseguy\v01a1680713287241b932f19dd0286c13\Whole')))->toBeTrue()
+        ->and($api->requests)->toHaveCount(2);
+});
+
 it('keeps the declare() statements first', function (): void {
     commitsOfDseguy([commit('a', ['body' => "<?php\ndeclare(strict_types=1);\n\nclass Strict { public static function add(int \$a): int { return \$a + 1; } }"])]);
 
@@ -103,7 +129,7 @@ it('ignores classes outside DevNull\<user>\<Class>', function (string $class): v
 
     expect(class_exists($class))->toBeFalse()
         ->and($api->requests)->toBe([]);
-})->with(['Ignored', 'Elsewhere\dseguy\Ignored', 'DevNull\Ignored', 'DevNull\dseguy\Deeper\Ignored']);
+})->with(['Ignored', 'Elsewhere\dseguy\Ignored', 'DevNull\Ignored', 'DevNull\dseguy\Deeper\Ignored', 'DevNull\dseguy\v01a1680\Ignored']);
 
 it('finds nothing quietly', function (): void {
     commitsOfDseguy([commit('a', ['body' => '<?php class Something {}'])]);

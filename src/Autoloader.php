@@ -9,7 +9,8 @@ use PhpToken;
 use Throwable;
 
 /**
- * Loads DevNull\<user>\<Class> by running the PHP snippet of @user's latest commit that declares it.
+ * Loads DevNull\<user>\<Class> by running the PHP snippet of @user's latest commit that declares it, and
+ * DevNull\<user>\v<id>\<Class> from the commit of @user whose id starts with <id>.
  *
  * It runs code from the Internet, so it only ever looks at the commits of the user the class is named after.
  */
@@ -43,32 +44,62 @@ final class Autoloader
     public static function load(string $class): void
     {
         $parts = explode('\\', ltrim($class, '\\'));
+        $version = count($parts) === 4 && preg_match('/^v([0-9a-f]{8,32})$/i', $parts[2], $match) === 1 ? strtolower($match[1]) : null;
 
-        if (count($parts) !== 3 || strcasecmp($parts[0], self::NAMESPACE) !== 0 || preg_match('/^[A-Za-z0-9_]+$/', $parts[1]) !== 1) {
+        if ((count($parts) !== 3 && $version === null) || strcasecmp($parts[0], self::NAMESPACE) !== 0 || preg_match('/^[A-Za-z0-9_]+$/', $parts[1]) !== 1) {
             return;
         }
 
         // GitHub usernames have dashes, which namespaces can't have, and no underscores.
         $user = str_replace('_', '-', $parts[1]);
-        $namespace = self::NAMESPACE . '\\' . $parts[1];
+        $namespace = implode('\\', array_slice($parts, 0, -1));
 
         try {
             $client = (self::$clientFactory ?? Client::create(...))(Settings::resolve());
 
-            foreach ($client->pages("/api/v1/users/{$user}/commits") as $page) {
-                foreach ($page as $commit) {
-                    $body = is_string($commit['body'] ?? null) ? $commit['body'] : '';
-                    $id = is_string($commit['id'] ?? null) ? $commit['id'] : '?';
+            foreach (self::commits($client, $user, $version) as $commit) {
+                $body = is_string($commit['body'] ?? null) ? $commit['body'] : '';
+                $id = is_string($commit['id'] ?? null) ? $commit['id'] : '?';
 
-                    foreach (self::snippets($body) as $snippet) {
-                        if (self::run($snippet, $namespace, $class, $id)) {
-                            return;
-                        }
+                foreach (self::snippets($body) as $snippet) {
+                    if (self::run($snippet, $namespace, $class, $id)) {
+                        return;
                     }
                 }
             }
         } catch (Throwable $e) {
             self::warn("devnull: could not load {$class}: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * @user's commits from the latest, or only those whose id, without its dashes, starts with $version: a whole id
+     * is fetched directly.
+     *
+     * @return iterable<array<mixed>>
+     */
+    private static function commits(Client $client, string $user, ?string $version): iterable
+    {
+        if ($version !== null && strlen($version) === 32) {
+            $id = implode('-', [substr($version, 0, 8), substr($version, 8, 4), substr($version, 12, 4), substr($version, 16, 4), substr($version, 20)]);
+            $commit = $client->get("/api/v1/commits/{$id}")['data'] ?? null;
+            $author = is_array($commit) ? $commit['author'] ?? null : null;
+
+            if (is_array($commit) && is_array($author) && is_string($author['username'] ?? null) && strcasecmp($author['username'], $user) === 0) {
+                yield $commit;
+            }
+
+            return;
+        }
+
+        foreach ($client->pages("/api/v1/users/{$user}/commits") as $page) {
+            foreach ($page as $commit) {
+                $id = is_string($commit['id'] ?? null) ? strtolower(str_replace('-', '', $commit['id'])) : '';
+
+                if ($version === null || str_starts_with($id, $version)) {
+                    yield $commit;
+                }
+            }
         }
     }
 

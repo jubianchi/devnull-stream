@@ -161,8 +161,16 @@ final class LeftPad
 
 - `DevNull\<user>\<Class>` loads the class, interface, trait or enum `<Class>` from @user's commits, looking through
   them from the latest: committing a new version releases it. Replies don't count.
-- The snippet goes in the `DevNull\<user>` namespace, after its `declare()` statements. A snippet that names its own
-  namespace only loads the classes it declares in `DevNull\<user>`.
+- `DevNull\<user>\v<id>\<Class>` pins a version: the commit of @user whose id starts with `<id>`, written without its
+  dashes, from its first 8 characters (the first block of the id, as in `commit 01a16807-…`) up to the whole id, which
+  is fetched directly:
+
+  ```php
+  use DevNull\dseguy\v01a16807\LeftPad;                         // commit 01a16807-1328-7241-b932-f19dd0286c13
+  ```
+
+- The snippet goes in the namespace of the class, `DevNull\<user>` or `DevNull\<user>\v<id>`, after its `declare()`
+  statements. A snippet that names its own namespace only loads the classes it declares in that namespace.
 - GitHub usernames have dashes, which PHP namespaces can't: write them as underscores, e.g. `DevNull\jean_pierre\Foo`
   for @jean-pierre.
 - A snippet that doesn't parse or throws raises a warning, and the next commit declaring the class gets its chance.
