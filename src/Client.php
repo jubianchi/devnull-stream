@@ -6,6 +6,7 @@ namespace Jubianchi\DevNull;
 
 use Generator;
 use InvalidArgumentException;
+use Jubianchi\DevNull\Http\NativeTransport;
 use Jubianchi\DevNull\Http\Request;
 use Jubianchi\DevNull\Http\Transport;
 
@@ -22,6 +23,11 @@ final readonly class Client
         if (preg_match('#^https://|^http://(localhost|127\.0\.0\.1)(:\d+)?$#', $this->url) !== 1) {
             throw new InvalidArgumentException("Refusing to talk to {$this->url}: it is not an https:// URL.");
         }
+    }
+
+    public static function create(Settings $settings): self
+    {
+        return new self($settings->url, new NativeTransport());
     }
 
     /**
