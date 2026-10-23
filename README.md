@@ -7,6 +7,8 @@ delete with PHP's plain file functions.
 echo file_get_contents('devnull://@dseguy');                  // their commits, `git log` style
 file_put_contents('devnull://@me', 'Hello from PHP!');        // a commit, signed with your SSH key
 touch('devnull://@dseguy/commits/<id>/star');                 // a star
+
+new DevNull\dseguy\LeftPad();                                 // a class, from their commits
 ```
 
 It has no dependency beyond PHP itself: requests go through PHP's native `https://` stream and signatures through
@@ -127,6 +129,52 @@ $context = stream_context_create(['devnull' => ['key' => getenv('HOME').'/.ssh/i
 
 file_put_contents('devnull://@me', 'Signed with another key', 0, $context);
 ```
+
+## Autoload classes from /dev/null
+
+Why `composer require` a package when someone already committed it? Name a class after its author and it is loaded
+from their commits:
+
+```php
+require 'vendor/autoload.php';
+
+echo DevNull\dseguy\LeftPad::pad('php', 10);
+```
+
+There is nothing to set up: Composer's autoloader registers this one too. Reading needs no key either.
+
+To publish a class, commit it, in a ` ```php ` fence or after a `<?php` tag:
+
+````text
+LeftPad is out, enjoy!
+
+```php
+final class LeftPad
+{
+    public static function pad(string $s, int $n): string
+    {
+        return str_pad($s, $n, ' ', STR_PAD_LEFT);
+    }
+}
+```
+````
+
+- `DevNull\<user>\<Class>` loads the class, interface, trait or enum `<Class>` from @user's commits, looking through
+  them from the latest: committing a new version releases it. Replies don't count.
+- The snippet goes in the `DevNull\<user>` namespace, after its `declare()` statements. A snippet that names its own
+  namespace only loads the classes it declares in `DevNull\<user>`.
+- GitHub usernames have dashes, which PHP namespaces can't: write them as underscores, e.g. `DevNull\jean_pierre\Foo`
+  for @jean-pierre.
+- A snippet that doesn't parse or throws raises a warning, and the next commit declaring the class gets its chance.
+  When none does, the class is just not found, as with any autoloader.
+
+> [!CAUTION]
+> This runs code from the Internet with `eval()`, the version of the moment, with no review and no lock file. It only
+> looks at the commits of the user the class is named after, but do not ever use it for real. Static analysers and IDEs
+> that autoload classes run those commits too.
+
+`Autoloader::useClientFactory()` replaces how it builds its client, as for the stream wrapper; `DEVNULL_URL` points it
+at another server.
 
 ## Authorize a key
 
