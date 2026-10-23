@@ -16,6 +16,11 @@ final class StreamWrapper
 {
     public const string SCHEME = Path::SCHEME;
 
+    /**
+     * What the last write got back: the link to the commit or reply it created, or '' when it failed.
+     */
+    public private(set) static string $lastResponse = '';
+
     /** @var resource|null */
     public $context;
 
@@ -28,6 +33,8 @@ final class StreamWrapper
     private ?Generator $pages = null;
 
     private bool $consumed = false;
+
+    private ?Path $writing = null;
 
     /** @var list<string> */
     private array $entries = [];
@@ -53,6 +60,15 @@ final class StreamWrapper
     {
         try {
             $target = Path::parse($path);
+
+            if ($mode[0] !== 'r') {
+                $this->writing = $target->isCommitTarget()
+                    ? $target
+                    : throw new RuntimeException("Write to devnull://@you to commit, or to devnull://@user/commits/<id> to reply, not to {$path}.");
+
+                return true;
+            }
+
             $listing = $target->listingUri();
             $commitId = $target->commitId();
 
@@ -102,6 +118,30 @@ final class StreamWrapper
     public function stream_eof(): bool
     {
         return $this->buffer === '' && $this->pages === null;
+    }
+
+    public function stream_write(string $data): int
+    {
+        $this->buffer .= $data;
+
+        return strlen($data);
+    }
+
+    /**
+     * The whole message is sent once, when the stream closes, so several fwrite() calls make a single commit.
+     */
+    public function stream_close(): void
+    {
+        if ($this->writing === null || trim($this->buffer) === '') {
+            return;
+        }
+
+        try {
+            self::$lastResponse = $this->client()->commit($this->buffer, $this->writing->commitId() ?? '');
+        } catch (Throwable $e) {
+            self::$lastResponse = '';
+            self::warn($e->getMessage());
+        }
     }
 
     public function stream_stat(): false
