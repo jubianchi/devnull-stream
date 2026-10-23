@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Jubianchi\DevNull;
 
+use Closure;
 use Generator;
 use InvalidArgumentException;
+use Jubianchi\DevNull\Authorization\Pkce;
 use Jubianchi\DevNull\Http\NativeTransport;
 use Jubianchi\DevNull\Http\Request;
 use Jubianchi\DevNull\Http\Transport;
@@ -103,6 +105,35 @@ final readonly class Client
             "X-Devnull-Nonce: {$nonce}",
             "X-SSH-Signature: {$signature}",
         ]));
+    }
+
+    /**
+     * Approves the key as a device with the web's sign-in page, as the mobile app does, then redeems the code it
+     * sends back to devnull://authorize. $ask gets the page to open and returns the link it redirected to.
+     *
+     * @param Closure(string): string $ask
+     * @return array<mixed>
+     */
+    public function authorize(string $deviceName, Closure $ask, ?Pkce $pkce = null): array
+    {
+        $pkce ??= Pkce::generate();
+
+        $url = $this->url . '/mobile/authorize?' . http_build_query([
+            'fingerprint' => PublicKey::fingerprint($this->keys->publicKeyOf($this->deviceKey())),
+            'device_name' => $deviceName,
+            'code_challenge' => $pkce->challenge(),
+            'code_challenge_method' => 'S256',
+            'state' => $pkce->state,
+            'redirect_uri' => 'devnull://authorize',
+        ]);
+
+        parse_str((string) parse_url(trim($ask($url)), PHP_URL_QUERY), $answer);
+
+        if (($answer['state'] ?? null) !== $pkce->state || !is_string($answer['code'] ?? null)) {
+            throw new RuntimeException('That is not the devnull://authorize?code=… link this approval sent back.');
+        }
+
+        return $this->signed('POST', '/api/v1/devices', ['code' => $answer['code'], 'code_verifier' => $pkce->verifier]);
     }
 
     /**
