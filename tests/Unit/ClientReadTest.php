@@ -36,6 +36,33 @@ it('puts the method, the URI, the status and the message in the error', function
         ->toThrow(ApiException::class, 'devnull: GET /x failed (HTTP 403): Nope.');
 });
 
+it("keeps the API's error code and the rest of its answer", function (): void {
+    $answer = ['message' => 'Asking too often.', 'code' => 'slow_down', 'interval' => 10];
+
+    try {
+        client(new FakeTransport()->on('GET', '/x', $answer, 400))->get('/x');
+        $error = null;
+    } catch (ApiException $error) {
+    }
+
+    expect($error?->errorCode)->toBe('slow_down')
+        ->and($error?->reason)->toBe('Asking too often.')
+        ->and($error?->status)->toBe(400)
+        ->and($error?->details)->toBe($answer);
+});
+
+it('has no error code for answers without one', function (): void {
+    try {
+        client(new FakeTransport()->on('GET', '/x', 'Oops', 500))->get('/x');
+        $error = null;
+    } catch (ApiException $error) {
+    }
+
+    expect($error)->not->toBeNull()
+        ->and($error?->errorCode)->toBeNull()
+        ->and($error?->details)->toBe([]);
+});
+
 it('follows the cursors of paginated lists', function (): void {
     $transport = new FakeTransport()
         ->on('GET', '/api/v1/users/dseguy/commits?replies=1', ['data' => [commit('a'), commit('b')], 'meta' => ['next_cursor' => 'c/1']])

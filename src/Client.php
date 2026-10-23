@@ -182,9 +182,18 @@ final readonly class Client
 
         if (!$response->isSuccessful()) {
             $error = json_decode($response->body, true);
-            $message = is_array($error) ? ($error['message'] ?? (is_array($error['error'] ?? null) ? $error['error']['message'] ?? null : null)) : null;
+            $error = is_array($error) ? $error : [];
+            $message = $error['message'] ?? (is_array($error['error'] ?? null) ? $error['error']['message'] ?? null : null);
+            $code = $error['code'] ?? null;
 
-            throw new ApiException($method, $uri, $response->status, is_string($message) ? $message : trim($response->body));
+            throw new ApiException(
+                $method,
+                $uri,
+                $response->status,
+                is_string($message) ? $message : trim($response->body),
+                is_string($code) ? $code : null,
+                $error,
+            );
         }
 
         return $response->body;
